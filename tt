@@ -1,24 +1,37 @@
-function buildAssociationGroups(data) {
+type AssociationData = Record<string, string>;
+type Row = {
+  name: string;
+  age: string | number;
+  associations: AssociationData;
+};
+
+function toTitleCase(str: string): string {
+  return str
+    .replace(/[_\.]/g, ' ')
+    .replace(/\w\S*/g, word => word[0].toUpperCase() + word.slice(1).toLowerCase());
+}
+
+function buildAssociationGroups(data: Row[]) {
   const allKeys = data.flatMap(row => Object.keys(row.associations || {}));
-  const grouped = {};
+  const grouped: Record<string, Set<string>> = {};
 
   for (const key of allKeys) {
     const [parent, child] = key.split('.');
-    if (!grouped[parent]) grouped[parent] = [];
-    if (!grouped[parent].includes(child)) grouped[parent].push(child);
+    if (!grouped[parent]) grouped[parent] = new Set();
+    grouped[parent].add(child);
   }
 
   return Object.entries(grouped).map(([parent, children]) => ({
-    headerName: parent,
-    children: children.map(child => ({
-      headerName: child,
-      valueGetter: params => params.data?.associations?.[`${parent}.${child}`]
+    headerName: toTitleCase(parent),
+    children: Array.from(children).map(child => ({
+      headerName: toTitleCase(child),
+      valueGetter: (params: any) => params.data?.associations?.[`${parent}.${child}`]
     }))
   }));
 }
 
 const columnDefs = [
-  { field: 'name' },
-  { field: 'age' },
+  { field: 'name', headerName: 'Name' },
+  { field: 'age', headerName: 'Age' },
   ...buildAssociationGroups(rowData)
 ];
