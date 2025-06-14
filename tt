@@ -1,100 +1,40 @@
-## Feedback Form for 5-Day Training Program
+const flatFields = [
+  'finance.revenue.q1',
+  'finance.revenue.q2',
+  'finance.expenses.q1',
+  'finance.expenses.q2',
+  'marketing.ads.q1'
+];
 
-**Thank you for participating in our 5-day training program. We value your feedback and appreciate you taking the time to complete this form.**
+function buildColumnGroups(fields) {
+  const root = {};
 
-Your responses will help us improve future training programs and ensure they meet the needs of participants. Please answer all questions honestly and to the best of your ability.
+  for (const path of fields) {
+    const parts = path.split('.');
+    let current = root;
 
-**Section 1: Program Overview**
+    for (let i = 0; i < parts.length; i++) {
+      const key = parts[i];
+      current.children = current.children || [];
+      let next = current.children.find(c => c.headerName === key);
 
-1. **Program Title:** 
-2. **Dates:** 
-3. **Trainer:** 
-4. **Overall, how satisfied are you with this training program?**
-    * Very Satisfied
-    * Satisfied
-    * Neutral
-    * Dissatisfied
-    * Very Dissatisfied
-5. **Did the program meet your expectations?**
-    * Yes
-    * No
-    * If no, please explain why:
+      if (!next) {
+        next = i === parts.length - 1
+          ? { headerName: key, field: path }
+          : { headerName: key };
+        current.children.push(next);
+      }
 
-**Section 2: Content and Delivery**
+      current = next;
+    }
+  }
 
-1. **How relevant was the content of the program to your needs?**
-    * Very Relevant
-    * Relevant
-    * Neutral
-    * Somewhat Irrelevant
-    * Not Relevant
-2. **How well was the content organized and presented?**
-    * Very Well
-    * Well
-    * Neutral
-    * Somewhat Poorly
-    * Poorly
-3. **How effective was the delivery of the content by the trainer?**
-    * Very Effective
-    * Effective
-    * Neutral
-    * Somewhat Ineffective
-    * Ineffective
-4. **What specific aspects of the content and delivery did you find most helpful?**
-5. **What specific aspects of the content and delivery could be improved?**
+  return root.children;
+}
 
-**Section 3: Training Materials and Resources**
+const columnDefs = buildColumnGroups(flatFields);
 
-1. **How helpful were the training materials provided (e.g., handouts, presentations)?**
-    * Very Helpful
-    * Helpful
-    * Neutral
-    * Somewhat Unhelpful
-    * Unhelpful
-2. **Were the training materials well-organized and easy to understand?**
-    * Very Well
-    * Well
-    * Neutral
-    * Somewhat Poorly
-    * Poorly
-3. **Will you refer to the training materials in the future?**
-    * Yes
-    * No
-    * Unsure
-
-**Section 4: Logistics and Facilities**
-
-1. **How satisfied were you with the training venue and facilities?**
-    * Very Satisfied
-    * Satisfied
-    * Neutral
-    * Dissatisfied
-    * Very Dissatisfied
-2. **Were the logistics of the program well-organized (e.g., breaks, meals, transportation)?**
-    * Very Well
-    * Well
-    * Neutral
-    * Somewhat Poorly
-    * Poorly
-3. **Do you have any suggestions for improving the logistics of the program?**
-
-**Section 5: Personal Growth and Development**
-
-1. **How confident are you that you can apply the knowledge and skills you learned in this program to your work?**
-    * Very Confident
-    * Confident
-    * Neutral
-    * Somewhat Unconfident
-    * Unconfident
-2. **What specific actions will you take to apply the knowledge and skills you learned?**
-3. **How will this program contribute to your professional development?**
-4. **Would you recommend this program to others?**
-    * Yes
-    * No
-    * Unsure
-
-**Section 6: Additional Comments**
-
-Please feel free to provide any additional comments or suggestions you have for improving this training program.
-
-**Thank you again for your feedback!**
+const gridOptions = {
+  columnDefs,
+  // other grid options...
+};
