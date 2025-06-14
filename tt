@@ -1,40 +1,24 @@
-const flatFields = [
-  'finance.revenue.q1',
-  'finance.revenue.q2',
-  'finance.expenses.q1',
-  'finance.expenses.q2',
-  'marketing.ads.q1'
-];
+function buildAssociationGroups(data) {
+  const allKeys = data.flatMap(row => Object.keys(row.associations || {}));
+  const grouped = {};
 
-function buildColumnGroups(fields) {
-  const root = {};
-
-  for (const path of fields) {
-    const parts = path.split('.');
-    let current = root;
-
-    for (let i = 0; i < parts.length; i++) {
-      const key = parts[i];
-      current.children = current.children || [];
-      let next = current.children.find(c => c.headerName === key);
-
-      if (!next) {
-        next = i === parts.length - 1
-          ? { headerName: key, field: path }
-          : { headerName: key };
-        current.children.push(next);
-      }
-
-      current = next;
-    }
+  for (const key of allKeys) {
+    const [parent, child] = key.split('.');
+    if (!grouped[parent]) grouped[parent] = [];
+    if (!grouped[parent].includes(child)) grouped[parent].push(child);
   }
 
-  return root.children;
+  return Object.entries(grouped).map(([parent, children]) => ({
+    headerName: parent,
+    children: children.map(child => ({
+      headerName: child,
+      valueGetter: params => params.data?.associations?.[`${parent}.${child}`]
+    }))
+  }));
 }
 
-const columnDefs = buildColumnGroups(flatFields);
-
-const gridOptions = {
-  columnDefs,
-  // other grid options...
-};
+const columnDefs = [
+  { field: 'name' },
+  { field: 'age' },
+  ...buildAssociationGroups(rowData)
+];
