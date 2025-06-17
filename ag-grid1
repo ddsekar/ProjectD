@@ -61,3 +61,96 @@ const columnDefs = [
 ];
 
 // ... rest of your AG Grid initialization code
+----------------------------------------------------------
+
+
+
+const gridOptions = {
+    // ... other grid options ...
+    dataTypeDefinitions: {
+        javaDateString: {
+            // How to convert the incoming string to a comparable value (JS Date object)
+            // This `fromString` is used internally by the grid for sorting/filtering
+            fromString: (value) => {
+                if (value == null) return null;
+                // If your string is just YYYY-MM-DD, new Date() might interpret it as UTC midnight.
+                // It's often safer to parse it specifically if you need local interpretation:
+                // const parts = value.split('-');
+                // return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                return new Date(value); // Assumes ISO 8601 string that JS Date can parse
+            },
+            // How to convert the comparable value back to a string for editing/saving
+            // This `toString` is used when the grid needs to represent the value as a string
+            toString: (dateObject) => {
+                if (dateObject == null) return '';
+                return dateObject.toISOString(); // Or dateObject.toISOString().split('T')[0] for YYYY-MM-DD
+            },
+            // The default comparator for this data type
+            // (You might still need filterParams.comparator for the agDateColumnFilter specifically)
+            // defaultComparator: (valueA, valueB) => {
+            //     // valueA and valueB will be JS Date objects (from fromString)
+            //     if (valueA === valueB) return 0;
+            //     if (valueA === null) return -1;
+            //     if (valueB === null) return 1;
+            //     return valueA.getTime() - valueB.getTime();
+            // }
+        },
+    },
+    // ...
+};
+{
+    field: 'dueDate',
+    headerName: 'Due Date',
+    cellDataType: 'javaDateString', // Use your custom data type
+    filter: 'agDateColumnFilter', // This filter will now largely leverage your dataTypeDefinition
+    editable: true,
+    cellEditor: 'agDateStringCellEditor', // Or 'agDateCellEditor' if you prefer editing JS Dates
+    // You might still need a valueFormatter for complex display needs,
+    // and a filterParams.comparator if the agDateColumnFilter isn't fully overridden by cellDataType.
+    // However, the intent of cellDataType is to simplify or even remove the need for these.
+}
+
+
+--------------------
+
+
+
+{
+    field: 'dueDate',
+    headerName: 'Due Date',
+    // ... valueFormatter as above ...
+    filter: 'agDateColumnFilter',
+    filterParams: {
+        comparator: (filterLocalDateAtMidnight, cellValue) => {
+            // filterLocalDateAtMidnight: The date chosen in the filter (JS Date object, 00:00:00 local time)
+            // cellValue: The actual value from your rowData (the ISO 8601 string, e.g., "2025-06-20T10:30:00Z")
+
+            if (cellValue == null) {
+                return -1; // Handle null/undefined values
+            }
+
+            // Parse the ISO 8601 string into a JavaScript Date object
+            const cellDate = new Date(cellValue);
+
+            // Create a Date object representing the start of the day for cellDate
+            // This ensures comparison is only on the date part, ignoring time.
+            const cellDateAtMidnight = new Date(
+                cellDate.getFullYear(),
+                cellDate.getMonth(),
+                cellDate.getDate()
+            );
+
+            // Now, compare the two Date objects
+            if (cellDateAtMidnight < filterLocalDateAtMidnight) {
+                return -1; // Cell date is before the filter date
+            } else if (cellDateAtMidnight > filterLocalDateAtMidnight) {
+                return 1;  // Cell date is after the filter date
+            }
+            return 0;      // Dates are the same
+        },
+        // Optional: If you only have YYYY-MM-DD strings and want a simpler date picker
+        // browserDatePicker: true,
+        // Optional: Customize available filter options
+        // filterOptions: ['equals', 'lessThan', 'greaterThan', 'inRange'],
+    },
+}
