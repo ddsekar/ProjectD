@@ -1,0 +1,181 @@
+import React, { useState } from 'react';
+
+const DEFAULT_ICONS = {
+  satisfied: '😊',
+  neutral: '😐',
+  notSatisfied: '😞',
+};
+
+const DEFAULT_LABELS = {
+  satisfied: "Satisfied",
+  neutral: "Neutral",
+  notSatisfied: "Not Satisfied",
+};
+
+export default function Feedback({
+  icons = DEFAULT_ICONS,
+  onSubmit,
+  maxFeedbackLen = 300,
+  initialRating = 5,
+  title = "How do you feel about our service?",
+  showTitle = true,
+  sentimentLabels = DEFAULT_LABELS,
+  style,
+  className,
+  requiredFeedback = false,
+}) {
+  const [selected, setSelected] = useState(null);
+  const [modal, setModal] = useState(false);
+  const [rating, setRating] = useState(initialRating);
+  const [timeVal, setTimeVal] = useState('');
+  const [timeUnit, setTimeUnit] = useState('minutes');
+  const [moreFeedback, setMoreFeedback] = useState('');
+
+  const [touched, setTouched] = useState(false);
+
+  const reset = () => {
+    setSelected(null);
+    setModal(false);
+    setRating(initialRating);
+    setTimeVal('');
+    setTimeUnit('minutes');
+    setMoreFeedback('');
+    setTouched(false);
+  };
+
+  const handleIcon = key => {
+    setSelected(key);
+    setModal(true);
+    setTouched(false);
+    setRating(initialRating);
+    setTimeVal('');
+    setTimeUnit('minutes');
+    setMoreFeedback('');
+  };
+
+  const disabled =
+    rating < 0 ||
+    rating > 10 ||
+    (timeVal !== '' && (isNaN(timeVal) || Number(timeVal) < 0)) ||
+    (requiredFeedback && !moreFeedback);
+
+  const handleSubmit = () => {
+    const payload = {
+      sentiment: selected,
+      rating,
+      timeSaved: (timeVal !== '' ? { value: +timeVal, unit: timeUnit } : null),
+      moreFeedback: moreFeedback,
+    };
+    if (onSubmit) onSubmit(payload);
+    reset();
+  };
+
+  return (
+    <div style={style} className={className}>
+      {showTitle && <h4>{title}</h4>}
+      <div style={{ fontSize: 40, display: 'flex', gap: 16, cursor: 'pointer' }}>
+        {Object.keys(icons).map(key =>
+          <span key={key} title={sentimentLabels[key]} onClick={() => handleIcon(key)}>
+            {icons[key]}
+          </span>
+        )}
+      </div>
+      {modal && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          }}
+          onClick={reset}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#fff', padding: 24, borderRadius: 8, width: 380, maxWidth: '90%',
+              boxShadow: "0 0 12px rgba(0,0,0,0.2)"
+            }}
+          >
+            <h5 style={{ marginBottom: 12 }}>Additional Feedback</h5>
+            <div style={{ marginBottom: 14 }}>
+              <label>
+                Rating (0-10): {rating}
+                <input
+                  style={{ width: '100%' }}
+                  type="range"
+                  min={0}
+                  max={10}
+                  value={rating}
+                  onChange={e => setRating(Number(e.target.value))}
+                />
+              </label>
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label>
+                Time Saved:
+                <div style={{ display: 'flex', gap: 8, marginTop: 5 }}>
+                  <input
+                    type="number"
+                    min={0}
+                    value={timeVal}
+                    onChange={e => setTimeVal(e.target.value)}
+                    style={{ flexGrow: 1 }}
+                    placeholder="Amount"
+                  />
+                  <select value={timeUnit} onChange={e => setTimeUnit(e.target.value)}>
+                    <option value="minutes">Minutes</option>
+                    <option value="hours">Hours</option>
+                    <option value="days">Days</option>
+                  </select>
+                </div>
+              </label>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label>
+                More feedback ({moreFeedback.length}/{maxFeedbackLen}){requiredFeedback && ' *'}
+                <textarea
+                  value={moreFeedback}
+                  onChange={e => setMoreFeedback(e.target.value.slice(0, maxFeedbackLen))}
+                  rows={4}
+                  style={{ width: "100%", marginTop: 6, resize: "vertical" }}
+                  maxLength={maxFeedbackLen}
+                  placeholder="Share any suggestions or thoughts..."
+                  onBlur={() => setTouched(true)}
+                />
+              </label>
+              {requiredFeedback && touched && !moreFeedback &&
+                <div style={{ color: "red", fontSize: 12 }}>Feedback is required.</div>
+              }
+            </div>
+            <div style={{ display: "flex", justifyContent: 'flex-end', gap: 10 }}>
+              <button onClick={reset}>Cancel</button>
+              <button
+                onClick={handleSubmit}
+                disabled={disabled}
+                style={{ background: "#1976d2", color: "white", border: 0, borderRadius: 3, padding: "6px 16px" }}
+              >
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+
+
+<Feedback
+  onSubmit={data => { /* handle feedback */ }}
+  maxFeedbackLen={500}
+  initialRating={7}
+  title="How do you feel about your experience?"
+  sentimentLabels={{
+    satisfied: "Loved it",
+    neutral: "It was OK",
+    notSatisfied: "Not great"
+  }}
+  className="custom-feedback"
+  style={{ margin: 20 }}
+/>
