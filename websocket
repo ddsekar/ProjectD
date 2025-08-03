@@ -1,0 +1,222 @@
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+public class LogController {
+
+    private final LogWebSocketHandler logWebSocketHandler;
+
+    @Autowired
+    public LogController(LogWebSocketHandler logWebSocketHandler) {
+        this.logWebSocketHandler = logWebSocketHandler;
+    }
+
+    // Example endpoint: POST /test-log
+    @PostMapping("/test-log")
+    public void sendTestLog(@RequestBody(required = false) String message) {
+        String logLine = (message == null || message.isEmpty()) 
+                ? "Test log at " + java.time.LocalDateTime.now() 
+                : message;
+        logWebSocketHandler.broadcastLogLine(logLine);
+    }
+}
+
+
+@Configuration
+@EnableWebSocket
+public class WebSocketConfig implements WebSocketConfigurer {
+    @Bean
+    public LogWebSocketHandler logWebSocketHandler() {
+        return new LogWebSocketHandler();
+    }
+
+    @Override
+    public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
+        registry.addHandler(logWebSocketHandler(), "/ws/logs")
+                .setAllowedOrigins("*");
+    }
+}
+
+
+public class LogWebSocketHandler extends TextWebSocketHandler {
+    // ... existing code ...
+
+    public void broadcastLogLine(String log) {
+        for (WebSocketSession s : sessions) {
+            if (s.isOpen()) {
+                try {
+                    s.sendMessage(new TextMessage(log));
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+}
+
+import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.TextWebSocketHandler;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.ArrayList;
+
+public class LogWebSocketHandler extends TextWebSocketHandler {
+    private List<WebSocketSession> sessions = Collections.synchronizedList(new ArrayList<>());
+
+    @Override
+    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+        sessions.add(session);
+        System.out.println("New session: " + session.getId());
+    }
+
+    @Override
+    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+        for (WebSocketSession s : sessions) {
+            if (s.isOpen()) {
+                s.sendMessage(message); // broadcast to all sessions
+            }
+        }
+    }
+
+    @Override
+    public void afterConnectionClosed(WebSocketSession session, org.springframework.web.socket.CloseStatus status) throws Exception {
+        sessions.remove(session);
+        System.out.println("Session closed: " + session.getId());
+    }
+}
+
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.socket.config.annotation.EnableWebSocket;
+import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
+import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
+
+@Configuration
+@EnableWebSocket
+public class WebSocketConfig implements WebSocketConfigurer {
+    @Override
+    public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
+        registry.addHandler(new LogWebSocketHandler(), "/ws/logs") // Your endpoint: ws://localhost:8080/ws/logs
+                .setAllowedOrigins("*"); // Allow cross-origin if needed
+    }
+}
+
+
+<LogViewer
+  websocketUrl="ws://localhost:8000/ws"
+  width="70vw"
+  height="40vh"
+  maxLines={500}
+  autoScroll={true}
+  hideAfterCompletion={true}
+  hideDelay={3000} // wait 3000ms (3 seconds) before hiding
+/>
+
+
+import React, { useEffect, useRef, useState } from 'react';
+
+export default function LogViewer({
+  websocketUrl,
+  width = '80vw',
+  height = '80vh',
+  enableStop = false,
+  className = '',
+  maxLines = null,
+  autoScroll = true,
+  placeholder = '',
+  hideAfterCompletion = false,
+  hideDelay = 0, // new prop: delay in ms before hiding
+}) {
+  const [logs, setLogs] = useState('');
+  const [lines, setLines] = useState([]);
+  const [stopped, setStopped] = useState(false);
+  const [finished, setFinished] = useState(false);
+  const [hide, setHide] = useState(false);
+  const ws = useRef(null);
+  const textareaRef = useRef(null);
+  const hideTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    if (!stopped && websocketUrl) {
+      ws.current = new WebSocket(websocketUrl);
+
+      ws.current.onmessage = (event) => {
+        setLines((prevLines) => {
+          let newLines = [...prevLines, event.data];
+          if (maxLines && newLines.length > maxLines) {
+            newLines = newLines.slice(newLines.length - maxLines);
+          }
+          setLogs(newLines.join('\n'));
+          return newLines;
+        });
+      };
+
+      ws.current.onclose = () => {
+        setFinished(true);
+        console.log('WebSocket closed');
+      };
+
+      ws.current.onerror = () => console.log('WebSocket error');
+
+      return () => {
+        ws.current && ws.current.close();
+        if (hideTimeoutRef.current) {
+          clearTimeout(hideTimeoutRef.current);
+        }
+      };
+    }
+  }, [websocketUrl, stopped, maxLines]);
+
+  useEffect(() => {
+    if (autoScroll && textareaRef.current) {
+      textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
+    }
+  }, [logs, autoScroll]);
+
+  // Start delay timer to hide after completion
+  useEffect(() => {
+    if (hideAfterCompletion && finished) {
+      hideTimeoutRef.current = setTimeout(() => {
+        setHide(true);
+      }, hideDelay);
+    }
+    return () => {
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
+      }
+    };
+  }, [finished, hideAfterCompletion, hideDelay]);
+
+  const clearLogs = () => {
+    setLogs('');
+    setLines([]);
+  };
+
+  const stopLogs = () => {
+    ws.current && ws.current.close();
+    setStopped(true);
+  };
+
+  if (hideAfterCompletion && hide) return null;
+
+  return (
+    <div>
+      <textarea
+        ref={textareaRef}
+        value={logs}
+        readOnly
+        className={className}
+        placeholder={placeholder}
+        style={{ width, height, display: 'block' }}
+      />
+      <button onClick={clearLogs}>Clear</button>
+      {enableStop && (
+        <button onClick={stopLogs} disabled={stopped}>
+          Stop
+        </button>
+      )}
+    </div>
+  );
+}
