@@ -1,0 +1,316 @@
+Scalability: Zeebe can scale throughput linearly by adding cluster nodes, essential for handling alert bursts during incidents.
+
+Observability: Built-in audit trail with append-only logging provides complete visibility
+		Alerting integrated with PagerDuty
+		logs stored in Amazon OpenSearch or CloudWatch Logs with tenant tags.
+
+Alert Integration Layer
+=======================
+PagerDuty webhook receivers and alert processors
+
+
+
+
+
+AWS Foundation Setup
+====================
+Deploy HRS core infrastructure using Infrastructure as Code (Terraform/CloudFormation)
+Set up VPC with proper subnets, security groups, and NACLs
+Configure AWS Direct Connect or VPN for secure onshore connectivity
+Implement IAM roles and policies for service-to-service authentication
+Implement mutual TLS authentication between cloud and onshore
+Deploy API gateways on both sides for controlled access
+
+
+
+Workflow Studio
+cloud-native workflow designer with drag-and-drop interface using JointJS 
+
+
+
+workflow versioning
+=====================
+
+Workflows defined using BPMN 2.0, stored as versioned artifacts in Amazon S3 with lifecycle policies.
+
+Use a version metadata registry (DynamoDB or RDS) to track workflow versions, tenant assignments, and deployment status.
+
+Support workflow promotion process:
+
+	Upload new workflow version to staging S3 bucket.
+
+	Validate and run test executions in staging environment (Zeebe blue cluster).
+
+	Promote to production (green cluster) via automation pipeline once tests pass.
+
+	Retire old version with configurable overlap window.
+
+
+
+
+Action Library
+==============
+
+Create library of pre-built AWS service connectors (EC2, RDS, Lambda, etc.)
+Develop onshore connectivity modules for hybrid workflows
+Secure tunnel establishment for onshore asset communication
+
+
+
+AWS service integrations (EC2, RDS, Lambda, CloudWatch)
+
+Each supported action type runs as a standalone AWS Lambda function or containerized service (ECS/EKS).
+
+Actions connect to external systems/services:
+	AWS SDK calls (EC2, RDS, S3, Systems Manager).
+	On-prem API endpoints (through secure VPN or AWS PrivateLink).
+	Third-party tools (PagerDuty, Slack, Jira).
+
+
+
+1. Establish Secure Network Connectivity
+	AWS Direct Connect: Set up a dedicated, private network connection between your on-premises datacenter and AWS to reduce latency and increase security.
+	Site-to-Site VPN: Create an encrypted IPSec VPN tunnel over the internet between AWS VPC and on-premises network for secure communication.
+	AWS Transit Gateway: Use to connect multiple VPCs and on-premises networks efficiently if you have complex connectivity needs.
+
+2. Expose On-Prem Services via API Gateway or Load Balancer
+	Deploy an on-premises API Gateway or reverse proxy that exposes RESTful APIs for the services you want to consume.
+	Alternatively, use a load balancer or service mesh within on-prem that can route requests from AWS securely.
+	APIs should be protected with authentication (OAuth, mutual TLS).
+
+3. Invoke On-Prem Services from AWS Workflow Actions
+	In your AWS Step Functions or Zeebe workflow, define action tasks that call your on-prem API endpoints using:
+	AWS Lambda functions with HTTP clients (e.g., Axios, requests) to invoke on-prem services via secure network.
+	Containerized action executors (ECS/EKS) if heavier logic or specific SDKs are required.
+	Use retry and timeout policies in workflow definitions to handle transient network failures gracefully.
+
+4. Secure Authentication and Authorization
+	Use mutual TLS certificates or API keys for secure API authentication.
+	Store credentials securely in AWS Secrets Manager and fetch at runtime in your Lambda or executor.
+	Consider AWS PrivateLink if your on-premises environment supports it, to expose services directly in your VPC privately.
+
+
+
+Execution monitor
+=================
+
+Real-time workflow execution monitoring dashboard
+Use Camunda Operate for monitoring workflow executions and providing tenant-specific visibility.
+
+Onshore Integration Points
+===========================
+
+Deploy lightweight agents on onshore systems for command execution
+
+
+
+
+Success Metrics & KPIs
+=======================
+
+
+Engine
+===========
+
+Zeebe
+
+Zeebe easily handles workflows that stay active for hours or a few days
+
+Cross-environment workflows that must touch on-prem systems with long-running human approvals.
+BPMN-modeled processes reused by both onshore and cloud teams.
+
+Increase log size or enable S3/NFS off-loading if you expect many concurrent 3- to 4-day instances.
+monitor broker storage and cluster health.
+
+Cloud-Native Architecture: Camunda 8 uses the Zeebe engine, which is purpose-built for cloud environments with horizontal scalability and no external database dependencies. This aligns perfectly with your AWS deployment goals.
+
+AWS Simple Workflow Service ------------> Large Payload Support: Larger data objects can be passed between workflow steps; no strict payload size limit per event as with Step Functions. Pay per task/event,  Data transferred out is charged based on a tiered pricing model
+
+Temporal -----> long-running processes, Durable execution, Horizontally scalable, 
+
+Apache Airflow ------------> Data-Heavy Operations	
+
+Argo Workflows ------------> Kubernetes-Native Deployment
+step function ---------> Pay-per-transition pricing, Native AWS integrations, Instant scalability & zero ops, Built-in retries, timers, and error handling 
+Out-of-the-box service integrations (Lambda, ECS/Fargate, SNS/SQS, DynamoDB, EventBridge, SageMaker, etc.) eliminate glue code for common remediation steps that touch AWS resources.
+
+
+AWS Step Functions - Pay-per-state-transition	
+Camunda 8 (Zeebe) - Subscription-based SaaS or self-managed on Cloud	
+Temporal - Open source with optional cloud-hosted (Temporal Cloud)	
+AWS Simple Workflow Service (SWF) - Pay per workflow execution & tasks	
+Apache Airflow (Managed Services)- In cloud-managed offers, pricing is often by instance hours, storage, and data transfer. Self-managed is infrastructure cost plus operational overhead. Workflow executions are free.
+
+
+
+
+
+64 KB input/output payload per state
+JSON/YAML definition, no BPMN
+Single-region execution (though it can call multi-region services).
+State-transition-based billing (High-fan-out loops (Map/Parallel) can become costly if not optimized)
+
+Fault-Tolerance Features
+	Automatic retries & exponential back-off:
+	Catch / Fallback paths
+	State resumption	
+
+multi-tenancy
+=============
+Logical tenant isolation via:
+
+	Namespaces in Kubernetes & Zeebe partitions per tenant or tenant group.
+
+	Tenant ID as metadata/tag on all workflow and execution data (Zeebe variables, logs).
+
+	Access controls via application-layer and Zeebe client interceptors.
+
+Workflow executions and logs filtered based on tenant context to ensure tenancy boundary.
+
+
+Authentication integrated with corporate identity (e.g., AWS Cognito + SAML or OIDC).
+	Tenant-scoped authorization via API Gateway + Lambda authorizers.
+	Role-based access control (RBAC) for workflow designers, operators, and auditors — restricting actions by tenant and environment.
+	Tenant-specific UI portals (execution dashboards).??????
+
+
+
+Each user in the system can be linked to one or more tenants.
+
+	User-tenant relationships stored in an identity management system or a dedicated user directory database (e.g., AWS Cognito with custom attributes, or a separate RDS/DynamoDB store).
+
+Support metadata per association including:
+	User roles within that tenant
+	Status (active/inactive)
+	Date of association
+
+2. Role Definitions per Tenant
+Define granular roles scoped per tenant, for example:
+
+Role	Permissions
+Primary Owner	Full admin on tenant:
+- Create, update, delete workflows
+- Deploy workflows
+- Manage tenant users and roles
+- View monitoring dashboards and logs
+Developer	Create, edit, and submit workflows for deployment (subject to approval)
+- View own executions and logs
+Deployer	Approve and deploy workflows to production
+- Manage versions and releases
+Monitor	View execution logs, dashboards, and alerts
+- No edit or deploy permissions
+Roles can be hierarchical (e.g., Primary Owner has all Developer, Deployer, and Monitor rights).
+
+Roles can also be customized or extended per tenant policy.
+
+3. Authentication & Authorization Flow
+Use a federated identity provider (e.g., AWS Cognito, Keycloak) to authenticate users.
+Upon login, fetch the user’s tenant memberships and roles.
+Issue JWT tokens with embedded tenant IDs and role claims.
+API Gateway and backend services enforce authorization by verifying user’s role for the requested tenant and operation:
+	Only allow workflow editing/deployment APIs for Developers/Deployers on that tenant.
+	Only allow logs and metrics viewing APIs for Monitor role.
+	Only Primary Owner can manage tenant user mappings.
+
+
+
+Cloud Platforms
+===============
+
+- AWS services — Step Functions, Lambda/ECS fargate, EventBridge, CloudWatch, IAM, VPC, Secrets Manager.
+- Camunda 8 (BPMN/Zeebe) modeling 
+- Amazon States Language for Step Functions.
+- Terraform/CloudFormation & Helm for EKS/Zeebe stacks.
+- AWS CodePipeline for CI/CD of workflows and infrastructure.
+- Containerization with Docker;
+
+
+
+Workflow Promotion Process
+============
+Authoring Environment
+	Tenant developers design workflows in cloud-hosted BPMN modeler.
+	Package workflows with dependencies and action specifications.
+
+Staging & Testing
+	Upload packages to staging bucket; trigger CI/CD.
+	QA and tenant user acceptance testing (UAT) in staging Zeebe environment.
+Approval
+	Automated or manual gate approval for production promotion.
+
+Production Release
+	Deploy workflow package to production cluster (green).
+	Switch production traffic to new workflows with minimal disruption.
+
+Version Retirement
+	After overlap window, retire old workflows and archive packages.
+
+
+
+
+blue-green strategy
+====================
+
+tenant specific zeebe cluster blue-green
+Release Pipeline
+    CI/CD pipelines (AWS CodePipeline/CodeBuild or Jenkins) automatically:
+	Validate BPMN syntax & unit tests.
+	Deploy workflow version to staging Zeebe cluster (blue).
+Traffic Switching
+	Upon approval, update API Gateway or load balancer routing to redirect tenant workloads from the green to blue Zeebe cluster (or vice versa).
+	Keep old version active for a configurable grace period for safe rollback.
+
+
+
+
+
+PUSH VS PULL
+=============
+
+Push vs. pull for HRS
+	Push (event/webhook/message)
+		Event sources publish to a broker or invoke an endpoint; workers consume immediately, giving near‑real‑time start and horizontal fan‑out via consumer groups/partitions. This minimizes detection latency and scales by adding consumers.
+	Ideal for alert resolution and BCP triggers where every second matters; polling intervals otherwise add avoidable delay.
+
+Pull (polling/long‑polling)
+	Workers regularly check for work; simple to implement but introduces latency tied to poll interval and can waste calls when no work exists.
+	Useful when producers can’t send outbound calls (firewalls), when dedup/batching is desired, or for high‑variance, non‑critical checks.
+
+When to use pull
+	Network constraints: on‑prem systems allow outbound-only connections from cloud, blocking webhooks.
+	Back‑pressure: throttle concurrency by limiting worker count and per‑action concurrency to protect fragile systems.
+	Batching: collect N items or T seconds of items before acting (e.g., group remediation).
+	Untrusted producers: avoid exposing public endpoints; workers fetch from a private, authenticated queue/topic.
+
+
+
+
+Recommendation
+	Choose push for most production alert remediation and BCP triggers to minimize detection-to-action time and enable elastic fan‑out; reserve pull where endpoints cannot accept inbound calls, where batching is valuable, or where tight back‑pressure is needed.
+
+Why push first
+	Lower latency: actions start as soon as an event is produced, avoiding poll intervals or sensor delays.
+	Elastic throughput: scale consumers horizontally on queue/topic partitions; the broker buffers bursts without manual tuning.
+	Clear causality: each event directly drives an action, simplifying tracing, idempotency keys, and auditing.
+
+Where pull shines
+	Network constraints: on‑prem systems behind firewalls that only allow outbound connections from the cloud side.
+	Back‑pressure safety: workers meter their own intake (poll rate, max in‑flight) to protect fragile downstreams.
+	Batching and periodicity: combine many small signals into one action, or perform scheduled condition checks.
+
+Practical HRS pattern
+	Use an event/broker layer for push (alerts, test schedules) and action workers that auto‑scale on backlog; attach DLQs, retries with jitter, and per‑tenant quotas.
+	Add a pull connector tier for on‑prem integrations: long‑polling, adaptive intervals, circuit breakers, and idempotent writes; keep tasks small with payloads stored by reference.
+
+Tenant and governance fit
+	Enforce tenant isolation at the broker (partitions/queues per tenant or strong keys) and at workers (scoped credentials), regardless of push or pull.
+	Expose mode per action type in Avertix: “push” by default; “pull” for constrained connectors, with policy‑controlled poll windows, concurrency caps, and audit of every fetch/execute/ack.
+
+Decision checklist
+	Target start latency under a few seconds → push.
+	Endpoint cannot receive inbound traffic / requires batching → pull.
+	Unpredictable surges with strict SLOs → push with autoscaling, broker buffering.
+	Highly sensitive or rate‑limited systems → pull with tight concurrency and adaptive backoff.
+
+
+
